@@ -4,7 +4,6 @@ subprocess.run(["playwright", "install", "chromium"], check=True)
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from app.scraper import scrape_profiles
-import asyncio
 
 app = FastAPI()
 

@@ -1,20 +1,18 @@
-import sys
 import asyncio
-import json
-import argparse
 from playwright.async_api import async_playwright
-
-# Pour compatibilité Windows + Python ≥ 3.8
-if sys.platform.startswith("win") and sys.version_info >= (3, 8):
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+import time
 
 async def scrape_profiles(li_at, search_link, max_results):
     results = []
     scraped = 0
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"]
+        )
         context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
             storage_state={
                 "cookies": [{
                     "name": "li_at",
@@ -30,17 +28,21 @@ async def scrape_profiles(li_at, search_link, max_results):
         )
 
         page = await context.new_page()
-        await page.goto("https://www.linkedin.com/feed/", timeout=120000)
+
+        # Visite LinkedIn Feed pour authentifier le cookie
+        await page.goto("https://www.linkedin.com/feed/", timeout=180000, wait_until="domcontentloaded")
         await page.wait_for_timeout(5000)
-        await page.goto(search_link, timeout=120000)
+
+        await page.goto(search_link, timeout=180000, wait_until="domcontentloaded")
         await page.wait_for_timeout(5000)
 
         while scraped < max_results:
-            for _ in range(5):
-                await page.keyboard.press("End")
+            # Scroll pour charger plus de profils
+            for _ in range(3):
+                await page.mouse.wheel(0, 10000)
                 await asyncio.sleep(2)
 
-            profiles = await page.query_selector_all('.search-results-container .list-style-none li')
+            profiles = await page.query_selector_all('.reusable-search__entity-result-list > li')
 
             if not profiles:
                 break
@@ -61,14 +63,12 @@ async def scrape_profiles(li_at, search_link, max_results):
                     profil_job = await job_el.inner_text() if job_el else ""
                     profil_local = await loc_el.inner_text() if loc_el else ""
 
-                    current_company = await page.evaluate("""
-                        (span) => {
-                            if (span && span.nextSibling) {
-                                return span.nextSibling.textContent.trim();
-                            }
-                            return '';
+                    current_company = await page.evaluate("""(span) => {
+                        if (span && span.nextSibling) {
+                            return span.nextSibling.textContent.trim();
                         }
-                    """, span_el) if span_el else ""
+                        return '';
+                    }""", span_el) if span_el else ""
 
                     results.append({
                         "Name": profil_name,
@@ -79,10 +79,10 @@ async def scrape_profiles(li_at, search_link, max_results):
                     })
 
                     scraped += 1
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(1)
 
                 except Exception as e:
-                    print(f"⚠️ Error extracting profile: {e}")
+                    print(f"Error extracting profile: {e}")
 
             try:
                 next_button = await page.query_selector('//button[@aria-label="Suivant"]')
@@ -99,5 +99,3 @@ async def scrape_profiles(li_at, search_link, max_results):
         await browser.close()
 
     return results
-
-
