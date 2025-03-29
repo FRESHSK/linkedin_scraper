@@ -1,10 +1,6 @@
 import subprocess
 subprocess.run(["playwright", "install", "chromium"], check=True)
 
-import asyncio
-import playwright.__main__ as pw_main
-asyncio.get_event_loop().run_until_complete(pw_main.main(["install"]))
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -12,7 +8,7 @@ from app.scraper import scrape_profiles
 
 app = FastAPI()
 
-# Ajout du CORS
+# CORS pour Swagger
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
